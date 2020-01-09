@@ -15,20 +15,38 @@ from tools import get_cur_ip
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 
+PASS_WORD = None
+
+
+@app.route('/setpass/', methods=['POST'])
+def set_pass():
+    if request.method == 'POST':
+        print("posting...")
+        global PASS_WORD
+        data = request.get_json()['data']
+        print("data", data)
+        PASS_WORD = data['local_pass']
+        print("lcoal_pass: ", PASS_WORD)
+        return "password set done!"
+    return ""
+
 
 @app.route('/', methods=['GET'])
 def get_ips():
     '''获取ip列表'''
-    try:
-        if request.method == 'GET':
-            ip_list = get_ip_list()
-            if len(ip_list) < 20:
-                ip_list = get_ip_list()
-            return json.dumps(ip_list)
-        else:
-            print("func " + sys._getframe().f_code.co_name + " method error")
-    except:
-        return traceback.print_exc()
+    # try:
+    if request.method == 'GET':
+        print("getting...")
+        ip_mac_map = get_ip_list()
+        if len(ip_mac_map) < 20:
+            print("获取ip过少，正在重新扫描....")
+            ip_mac_map = get_ip_list()
+        print(ip_mac_map)
+        return json.dumps(ip_mac_map)
+    else:
+        print("func " + sys._getframe().f_code.co_name + " method error")
+    # except:
+        # return traceback.print_exc()
 
 
 @app.route('/arpattack/', methods=['POST'])
