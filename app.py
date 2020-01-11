@@ -1,15 +1,18 @@
-import json
 import sys
+import time
+import json
 import traceback
 
 from flask import Flask
 from flask import request
 from flask_cors import CORS
 
-from tools import get_ip_list
+from tools import get_ip_mac_dict
 from tools import arpspoof
 from tools import get_gateway_ip
 from tools import get_cur_ip
+from tools import check_local_password
+from tools import clear_arp_list
 
 
 app = Flask(__name__)
@@ -26,27 +29,32 @@ def set_pass():
         data = request.get_json()['data']
         print("data", data)
         PASS_WORD = data['local_pass']
-        print("lcoal_pass: ", PASS_WORD)
-        return "password set done!"
+        check_result = check_local_password(PASS_WORD)
+        if check_result:
+            return "password set done!"
+        return "wrong password!"
     return ""
 
 
 @app.route('/', methods=['GET'])
 def get_ips():
     '''获取ip列表'''
-    # try:
-    if request.method == 'GET':
-        print("getting...")
-        ip_mac_map = get_ip_list()
-        if len(ip_mac_map) < 20:
-            print("获取ip过少，正在重新扫描....")
-            ip_mac_map = get_ip_list()
-        print(ip_mac_map)
-        return json.dumps(ip_mac_map)
-    else:
-        print("func " + sys._getframe().f_code.co_name + " method error")
-    # except:
-        # return traceback.print_exc()
+    try:
+        if request.method == 'GET':
+            global PASS_WORD
+            while not PASS_WORD:
+                time.sleep(1)
+            clear_arp_list(PASS_WORD)
+            ip_mac_map = get_ip_mac_dict()
+            if len(ip_mac_map) < 20:
+                print("获取ip过少，正在重新扫描....")
+                ip_mac_map = get_ip_mac_dict()
+            print(json.dumps(ip_mac_map))
+            return json.dumps(ip_mac_map)
+        else:
+            print("func " + sys._getframe().f_code.co_name + " method error")
+    except:
+        return traceback.print_exc()
 
 
 @app.route('/arpattack/', methods=['POST'])
@@ -61,7 +69,6 @@ def arp_attack():
             target_ip = data['target_ip']
             print(attack_time)
             print(target_ip)
-
             cur_ip = get_cur_ip()
             gateway_ip = get_gateway_ip()
 
