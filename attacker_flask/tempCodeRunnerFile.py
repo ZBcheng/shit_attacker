@@ -1,2 +1,0 @@
-
-        if request.method == 'GET':
