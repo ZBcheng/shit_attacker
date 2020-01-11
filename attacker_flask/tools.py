@@ -1,6 +1,5 @@
 import os
 import time
-import signal
 import asyncio
 import subprocess
 from threading import Thread
