@@ -2,7 +2,7 @@ import sys
 import time
 import json
 import traceback
-from multiprocessing import Process, Value
+from multiprocessing import Process
 
 from flask import Flask
 from flask import request

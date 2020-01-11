@@ -9,7 +9,6 @@ from threading import Thread
 import netifaces
 import pexpect
 from scapy.all import getmacbyip
-from scapy.all import sendp
 from scapy.all import send
 from scapy.all import Ether
 from scapy.all import ARP
