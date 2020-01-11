@@ -1,5 +1,6 @@
 import os
 import time
+import signal
 import asyncio
 import subprocess
 from threading import Thread
@@ -170,5 +171,5 @@ def clear_arp_list(password):
     # os.system(del_str)
 
 
-if __name__ == "__main__":
-    get_ip_list()
+# if __name__ == "__main__":
+    # get_ip_list()
